@@ -1,0 +1,35 @@
+body {
+margin: 0;
+background: #0d1b2a;
+font-family: 'DM Sans', sans-serif;
+display: flex;
+justify-content: center;
+align-items: center;
+height: 100vh;
+}
+
+.card {
+background: #1b2d42;
+padding: 40px;
+border-radius: 12px;
+width: 320px;
+}
+
+input {
+width: 100%;
+padding: 10px;
+margin: 10px 0;
+}
+
+.btn {
+width: 100%;
+padding: 10px;
+background: #e8a020;
+border: none;
+cursor: pointer;
+}
+
+#errorMsg {
+color: red;
+margin-top: 10px;
+}

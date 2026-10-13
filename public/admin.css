@@ -1,0 +1,122 @@
+:root {
+--navy: #0d1b2a;
+--navy-mid: #152333;
+--navy-card: #1b2d42;
+--navy-light: #253d56;
+--amber: #e8a020;
+--cream: #f5f0e8;
+--text: #c8c4bc;
+}
+
+body {
+margin: 0;
+font-family: 'DM Sans', sans-serif;
+background: linear-gradient(135deg, #0d1b2a, #1b2d42);
+color: var(--text);
+display: flex;
+}
+
+/* Sidebar */
+.sidebar {
+width: 240px;
+background: var(--navy-mid);
+padding: 20px;
+}
+
+.nav-item {
+display: block;
+padding: 10px;
+border-radius: 6px;
+cursor: pointer;
+}
+
+.nav-item:hover {
+background: var(--navy-light);
+}
+
+/* Main */
+.main {
+flex: 1;
+}
+
+.topbar {
+padding: 20px;
+background: var(--navy-mid);
+}
+
+/* Sections */
+.section {
+display: none;
+padding: 20px;
+}
+
+.section.active {
+display: block;
+}
+
+/* Cards */
+.card {
+background: var(--navy-card);
+border-radius: 10px;
+margin-top: 20px;
+}
+
+.card-header {
+padding: 15px;
+font-weight: bold;
+}
+
+.card-body {
+padding: 20px;
+}
+
+.no-padding {
+padding: 0;
+}
+
+/* Stats */
+.stats-row {
+display: flex;
+gap: 10px;
+}
+
+.stat-card {
+flex: 1;
+padding: 20px;
+background: var(--navy-card);
+text-align: center;
+}
+
+/* Table */
+table {
+width: 100%;
+border-collapse: collapse;
+}
+
+td {
+padding: 10px;
+border-bottom: 1px solid #333;
+}
+
+/* Form */
+input, select {
+width: 100%;
+padding: 10px;
+margin: 10px 0;
+}
+
+/* Buttons */
+.btn {
+padding: 10px;
+background: var(--amber);
+border: none;
+cursor: pointer;
+}
+
+.full-width {
+width: 100%;
+}
+
+.mt-6 {
+margin-top: 6px;
+}

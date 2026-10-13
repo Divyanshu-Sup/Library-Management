@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard — Library MS</title>
+
+```
+<link rel="stylesheet" href="/admin.css">
+
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+```
+
+</head>
+<body>
+
+<!-- Sidebar -->
+
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <h2>📚 Pustakshala</h2>
+        <span>Admin Panel</span>
+    </div>
+
+```
+<nav class="sidebar-nav">
+    <button class="nav-item active" onclick="showSection('dashboard', this)">🏠 Dashboard</button>
+    <button class="nav-item" onclick="showSection('books', this)">📖 Manage Books</button>
+    <button class="nav-item" onclick="showSection('addbook', this)">➕ Add Book</button>
+    <button class="nav-item" onclick="showSection('issue', this)">📤 Issue Book</button>
+    <button class="nav-item" onclick="showSection('issued', this)">📋 Active Issues</button>
+</nav>
+```
+
+</aside>
+
+<!-- Main -->
+
+<div class="main">
+
+```
+<div class="topbar">
+    <h1 id="pageTitle">Dashboard</h1>
+</div>
+
+<div class="content">
+
+    <!-- Dashboard -->
+    <div class="section active" id="sec-dashboard">
+        <div class="stats-row">
+            <div class="stat-card"><div id="statTotal">0</div></div>
+            <div class="stat-card"><div id="statCopies">0</div></div>
+            <div class="stat-card"><div id="statIssued">0</div></div>
+            <div class="stat-card"><div id="statAvail">0</div></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Recent Books</div>
+            <div class="card-body no-padding">
+                <table>
+                    <tbody id="dashBookTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Books -->
+    <div class="section" id="sec-books">
+        <div class="card">
+            <div class="card-header">All Books</div>
+            <div class="card-body no-padding">
+                <table>
+                    <tbody id="bookTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Book -->
+    <div class="section" id="sec-addbook">
+        <input id="addTitle" placeholder="Title">
+        <input id="addAuthor" placeholder="Author">
+        <input id="addQty" type="number" placeholder="Qty">
+        <button class="btn full-width mt-6" onclick="addBook()">Add Book</button>
+    </div>
+
+    <!-- Issue -->
+    <div class="section" id="sec-issue">
+        <select id="issueUserId" title="Select Student"></select>
+        <select id="issueBookId" title="Select Book"></select>
+        <button class="btn full-width mt-6" onclick="issueBook()">Issue</button>
+    </div>
+
+    <!-- Issued -->
+    <div class="section" id="sec-issued">
+        <table>
+            <tbody id="issueTable"></tbody>
+        </table>
+    </div>
+
+</div>
+```
+
+</div>
+
+<script src="/admin.js"></script>
+
+</body>
+</html>

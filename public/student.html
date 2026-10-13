@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal</title>
+
+```
+<link rel="stylesheet" href="/student.css">
+```
+
+</head>
+<body>
+
+<aside class="sidebar">
+    <button onclick="showSection('browse', this)">Browse</button>
+    <button onclick="showSection('mybooks', this)">My Books</button>
+</aside>
+
+<div class="main">
+
+```
+<div id="sec-browse" class="section active">
+    <input id="browseSearch" oninput="searchBrowse(this.value)" placeholder="Search">
+    <div id="browseGrid"></div>
+</div>
+
+<div id="sec-mybooks" class="section">
+    <table>
+        <tbody id="myBooksTable"></tbody>
+    </table>
+</div>
+```
+
+</div>
+
+<script src="/student.js"></script>
+
+</body>
+</html>
