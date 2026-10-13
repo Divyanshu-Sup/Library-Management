@@ -1,56 +1,88 @@
 const express = require('express');
-const router = express.Router();
-const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const User = require('../models/User');
 
-// Register
+const router = express.Router();
+
+function validUsername(username) {
+    return typeof username === 'string' && /^[a-zA-Z0-9_.-]{3,30}$/.test(username.trim());
+}
+
+// Public registration can create students only. Create administrators with: npm run create-admin.
 router.post('/register', async (req, res) => {
     try {
-        const exists = await User.findOne({ username: req.body.username });
-        if (exists) return res.status(400).json({ error: "Username already taken" });
+        const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+        const password = req.body.password;
 
-        const hash = await bcrypt.hash(req.body.password, 10);
-        const user = new User({
-            username: req.body.username,
-            password: hash,
-            role: req.body.role || 'student'
+        if (!validUsername(username)) {
+            return res.status(400).json({ error: 'Username must be 3–30 characters and use letters, numbers, _, ., or -.' });
+        }
+        if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
+            return res.status(400).json({ error: 'Password must be between 8 and 72 characters.' });
+        }
+
+        const exists = await User.findOne({ username });
+        if (exists) return res.status(409).json({ error: 'Username already taken.' });
+
+        const user = await User.create({
+            username,
+            password: await bcrypt.hash(password, 12),
+            role: 'student'
         });
-        await user.save();
-        res.json({ message: "User created" });
+        return res.status(201).json({ message: 'Account created. You can now log in.', userId: user._id });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        if (err.code === 11000) return res.status(409).json({ error: 'Username already taken.' });
+        console.error('Registration error:', err);
+        return res.status(500).json({ error: 'Could not create account.' });
     }
 });
 
-// Login
 router.post('/login', async (req, res) => {
     try {
-        const user = await User.findOne({ username: req.body.username });
-        if (!user) return res.status(401).json({ error: "User not found" });
+        const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+        const password = req.body.password;
+        if (!username || typeof password !== 'string' || password.length > 72) {
+            return res.status(400).json({ error: 'Enter a valid username and password.' });
+        }
 
-        const valid = await bcrypt.compare(req.body.password, user.password);
-        if (!valid) return res.status(401).json({ error: "Wrong password" });
+        const user = await User.findOne({ username });
+        const valid = user && await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(401).json({ error: 'Invalid username or password.' });
 
-        req.session.user = { _id: user._id, username: user.username, role: user.role };
-        res.json({ role: user.role, userId: user._id, username: user.username });
+        // Rotate the session ID after authentication to reduce session-fixation risk.
+        req.session.regenerate(err => {
+            if (err) {
+                console.error('Session error:', err);
+                return res.status(500).json({ error: 'Could not start session.' });
+            }
+            req.session.user = { _id: String(user._id), username: user.username, role: user.role };
+            req.session.save(saveErr => {
+                if (saveErr) return res.status(500).json({ error: 'Could not save session.' });
+                return res.json({ role: user.role, userId: String(user._id), username: user.username });
+            });
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Could not log in.' });
     }
 });
 
-// Logout
 router.post('/logout', (req, res) => {
-    req.session.destroy();
-    res.json({ message: "Logged out" });
+    if (!req.session) return res.json({ message: 'Logged out.' });
+    req.session.destroy(err => {
+        if (err) return res.status(500).json({ error: 'Could not log out.' });
+        res.clearCookie('pustakshala.sid', {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
+        res.json({ message: 'Logged out.' });
+    });
 });
 
-// Session check
 router.get('/me', (req, res) => {
-    if (req.session.user) {
-        res.json(req.session.user);
-    } else {
-        res.status(401).json({ error: "Not logged in" });
-    }
+    if (!req.session.user) return res.status(401).json({ error: 'Not logged in.' });
+    res.json(req.session.user);
 });
 
 module.exports = router;
