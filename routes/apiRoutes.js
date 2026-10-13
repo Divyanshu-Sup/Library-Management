@@ -1,141 +1,180 @@
 const express = require('express');
-const router = express.Router();
+const mongoose = require('mongoose');
 const Book = require('../models/Book');
 const Issue = require('../models/Issue');
+const User = require('../models/User');
 
-// ── Books ────────────────────────────────────────────────────────────────────
+const router = express.Router();
 
-// GET all books
-router.get('/books', async (req, res) => {
+function requireAuth(req, res, next) {
+    if (!req.session?.user) return res.status(401).json({ error: 'Please log in first.' });
+    next();
+}
+function requireAdmin(req, res, next) {
+    if (!req.session?.user) return res.status(401).json({ error: 'Please log in first.' });
+    if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Administrator access required.' });
+    next();
+}
+function validId(id) {
+    return typeof id === 'string' && mongoose.isValidObjectId(id);
+}
+function validationError(err) {
+    return err && (err.name === 'ValidationError' || err.name === 'CastError' || err.code === 11000);
+}
+
+router.get('/books/search', requireAuth, async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    if (!q) return res.json([]);
     try {
-        const books = await Book.find();
-        res.json(books);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ADD book
-router.post('/books', async (req, res) => {
-    try {
-        const book = new Book(req.body);
-        await book.save();
-        res.json({ message: "Book Added", book });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// UPDATE book
-router.put('/books/:id', async (req, res) => {
-    try {
-        const book = await Book.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json({ message: "Book Updated", book });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// DELETE book
-router.delete('/books/:id', async (req, res) => {
-    try {
-        await Book.findByIdAndDelete(req.params.id);
-        res.json({ message: "Book Deleted" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// SEARCH book
-router.get('/books/search', async (req, res) => {
-    try {
-        const q = req.query.q;
+        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const books = await Book.find({
             $or: [
-                { title: { $regex: q, $options: 'i' } },
-                { author: { $regex: q, $options: 'i' } }
+                { title: { $regex: escaped, $options: 'i' } },
+                { author: { $regex: escaped, $options: 'i' } }
             ]
-        });
+        }).limit(100);
         res.json(books);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Book search error:', err);
+        res.status(500).json({ error: 'Could not search books.' });
     }
 });
 
-// ── Issue / Return ────────────────────────────────────────────────────────────
-
-// Issue book (decrements quantity)
-router.post('/issue', async (req, res) => {
+router.get('/books', requireAuth, async (req, res) => {
     try {
-        const book = await Book.findById(req.body.bookId);
-        if (!book) return res.status(404).json({ error: "Book not found" });
-        if (book.quantity < 1) return res.status(400).json({ error: "No copies available" });
-
-        const issue = new Issue({
-            user: req.body.userId,
-            book: req.body.bookId
-        });
-        await issue.save();
-
-        book.quantity -= 1;
-        await book.save();
-
-        res.json({ message: "Book Issued", issue });
+        res.json(await Book.find().sort({ title: 1 }).limit(500));
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('List books error:', err);
+        res.status(500).json({ error: 'Could not load books.' });
     }
 });
 
-// Return book (increments quantity)
-router.post('/return', async (req, res) => {
+router.post('/books', requireAdmin, async (req, res) => {
     try {
-        const issue = await Issue.findById(req.body.issueId);
-        if (!issue) return res.status(404).json({ error: "Issue record not found" });
-        if (issue.returned) return res.status(400).json({ error: "Already returned" });
-
-        issue.returned = true;
-        issue.returnDate = new Date();
-        await issue.save();
-
-        await Book.findByIdAndUpdate(issue.book, { $inc: { quantity: 1 } });
-
-        res.json({ message: "Book Returned" });
+        const { title, author, quantity } = req.body;
+        if (typeof title !== 'string' || !title.trim() || title.trim().length > 200) return res.status(400).json({ error: 'Title is required and must be at most 200 characters.' });
+        if (typeof author !== 'string' || !author.trim() || author.trim().length > 120) return res.status(400).json({ error: 'Author is required and must be at most 120 characters.' });
+        if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) return res.status(400).json({ error: 'Quantity must be a whole number between 0 and 100000.' });
+        const book = await Book.create({ title: title.trim(), author: author.trim(), quantity });
+        res.status(201).json({ message: 'Book added.', book });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Add book error:', err);
+        res.status(validationError(err) ? 400 : 500).json({ error: validationError(err) ? 'Invalid book details.' : 'Could not add book.' });
     }
 });
 
-// Get issued books for a user
-router.get('/issued/:userId', async (req, res) => {
+router.put('/books/:id', requireAdmin, async (req, res) => {
+    if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid book ID.' });
+    const updates = {};
+    const { title, author, quantity } = req.body;
+    if (title !== undefined) {
+        if (typeof title !== 'string' || !title.trim() || title.trim().length > 200) return res.status(400).json({ error: 'Invalid title.' });
+        updates.title = title.trim();
+    }
+    if (author !== undefined) {
+        if (typeof author !== 'string' || !author.trim() || author.trim().length > 120) return res.status(400).json({ error: 'Invalid author.' });
+        updates.author = author.trim();
+    }
+    if (quantity !== undefined) {
+        if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100000) return res.status(400).json({ error: 'Quantity must be a whole number between 0 and 100000.' });
+        updates.quantity = quantity;
+    }
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'Provide at least one valid field to update.' });
     try {
-        const data = await Issue.find({ user: req.params.userId, returned: false })
-            .populate('book');
-        res.json(data);
+        const book = await Book.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
+        if (!book) return res.status(404).json({ error: 'Book not found.' });
+        res.json({ message: 'Book updated.', book });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Update book error:', err);
+        res.status(validationError(err) ? 400 : 500).json({ error: validationError(err) ? 'Invalid book details.' : 'Could not update book.' });
     }
 });
 
-// Get all active issues (admin)
-router.get('/issues/all', async (req, res) => {
+router.delete('/books/:id', requireAdmin, async (req, res) => {
+    if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid book ID.' });
     try {
-        const data = await Issue.find({ returned: false })
-            .populate('book')
-            .populate('user', 'username');
-        res.json(data);
+        const book = await Book.findByIdAndDelete(req.params.id);
+        if (!book) return res.status(404).json({ error: 'Book not found.' });
+        res.json({ message: 'Book deleted.' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Delete book error:', err);
+        res.status(500).json({ error: 'Could not delete book.' });
     }
 });
 
-// Get all users (admin)
-router.get('/users', async (req, res) => {
+router.post('/issue', requireAdmin, async (req, res) => {
+    const { bookId, userId } = req.body;
+    if (!validId(bookId) || !validId(userId)) return res.status(400).json({ error: 'Valid bookId and userId are required.' });
     try {
-        const User = require('../models/User');
-        const users = await User.find({ role: 'student' }, 'username _id');
-        res.json(users);
+        const user = await User.findOne({ _id: userId, role: 'student' });
+        if (!user) return res.status(404).json({ error: 'Student not found.' });
+        const book = await Book.findOneAndUpdate({ _id: bookId, quantity: { $gte: 1 } }, { $inc: { quantity: -1 } }, { new: true });
+        if (!book) {
+            const exists = await Book.exists({ _id: bookId });
+            return exists ? res.status(400).json({ error: 'No copies available.' }) : res.status(404).json({ error: 'Book not found.' });
+        }
+        try {
+            const issue = await Issue.create({ user: userId, book: bookId });
+            return res.status(201).json({ message: 'Book issued.', issue });
+        } catch (err) {
+            await Book.updateOne({ _id: bookId }, { $inc: { quantity: 1 } });
+            throw err;
+        }
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Issue book error:', err);
+        res.status(validationError(err) ? 400 : 500).json({ error: validationError(err) ? 'Invalid issue details.' : 'Could not issue book.' });
+    }
+});
+
+router.post('/return', requireAdmin, async (req, res) => {
+    const { issueId } = req.body;
+    if (!validId(issueId)) return res.status(400).json({ error: 'A valid issueId is required.' });
+    try {
+        const issue = await Issue.findOneAndUpdate({ _id: issueId, returned: false }, { $set: { returned: true, returnDate: new Date() } }, { new: true });
+        if (!issue) {
+            const exists = await Issue.exists({ _id: issueId });
+            return exists ? res.status(409).json({ error: 'This book has already been returned.' }) : res.status(404).json({ error: 'Issue record not found.' });
+        }
+        const bookUpdate = await Book.updateOne({ _id: issue.book }, { $inc: { quantity: 1 } });
+        if (bookUpdate.matchedCount === 0) {
+            console.error('Returned issue references missing book:', String(issue.book));
+            return res.status(500).json({ error: 'Return was recorded, but the book record is missing. Contact an administrator.' });
+        }
+        res.json({ message: 'Book returned.' });
+    } catch (err) {
+        console.error('Return book error:', err);
+        res.status(500).json({ error: 'Could not return book.' });
+    }
+});
+
+router.get('/issued/:userId', requireAuth, async (req, res) => {
+    if (!validId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID.' });
+    if (String(req.session.user._id) !== req.params.userId && req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: 'You can only view your own issued books.' });
+    }
+    try {
+        res.json(await Issue.find({ user: req.params.userId, returned: false }).populate('book').sort({ issueDate: -1 }));
+    } catch (err) {
+        console.error('List issued books error:', err);
+        res.status(500).json({ error: 'Could not load issued books.' });
+    }
+});
+
+router.get('/issues/all', requireAdmin, async (req, res) => {
+    try {
+        res.json(await Issue.find({ returned: false }).populate('book').populate('user', 'username').sort({ issueDate: -1 }));
+    } catch (err) {
+        console.error('List issues error:', err);
+        res.status(500).json({ error: 'Could not load issues.' });
+    }
+});
+
+router.get('/users', requireAdmin, async (req, res) => {
+    try {
+        res.json(await User.find({ role: 'student' }).select('username').sort({ username: 1 }).limit(1000));
+    } catch (err) {
+        console.error('List users error:', err);
+        res.status(500).json({ error: 'Could not load users.' });
     }
 });
 
